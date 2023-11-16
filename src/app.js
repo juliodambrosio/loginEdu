@@ -3,10 +3,10 @@ const app = express();
 const port = 3000;
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient()
-const User = require('./users');
-//const { Pool } = require('pg');
-//const { prisma } = require('./users');
+const prisma = new PrismaClient();
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
+
 
 
 // Middleware para lidar com dados JSON
@@ -18,39 +18,41 @@ app.get('/', (req, res) => {
 
 
 
-app.get('/search', (req, res)=>{
-  pool.query('SELECT * FROM Users', (err, result) => {
-    if (err) {
-      console.error('Erro na consulta:', err);
+app.get('/search', async (req, res)=>{
+  try {
+    findUsers(req);
+    res.status(200).json({ message: 'User was found!! Your login is approved!!'});
+    
+  } 
+  catch (error) {
+    console.log("Error: " + error)
+  }
+
   
-      return;
-    }
-    else{
-      console.log('Resultados da consulta:', result.rows);
-      res.send('Results'+ res.rows);
-      
-    }
-  });
-  
+
 });
 
 
+app.get('/login', async (req, res)=>{
+  
+  if(await login(req.body.email,req.body.password)){
+    res.status(200).json({ message: 'User was found!! Your login is approved!!'});
+    console.log('User was found!! Your login is approved!!')
+  }
+  else{
+    res.status(401).json({ message: 'User is incorrect !! Verify your email or passwords!!'});
+    console.log('User is incorrect !! Verify your email or passwords!!')
+  }
+  
+  
+});
+
 app.post('/add', (req, res) =>{
-  const name = req.body.name
-  const email = req.body.email
-  const password = req.body.password
-
-  const newUser = new User(name, email, password);
-
-  console.log('Dados recebidos:', newUser.name + "; " + newUser.email + "; " + newUser.password);
-  res.status(200).json({ mensagem: 'Dados recebidos com sucesso!' });
-
   try {
-      console.log('Enviando para o banco de dados!')
-      addUser(newUser)
-      
-
-  } catch (error) {
+    addUser(req);
+    res.status(200).json({ message: 'New User is Added!!' });
+  } 
+  catch (error) {
     console.log("Error: " + error)
   }
 
@@ -61,23 +63,94 @@ app.listen(port, () => {
   console.log(`Server is running at http://localhost:${port}`);
 });
 
-async function addUser(user) {
+async function addUser(req) {
   try {
-    await prisma.user.create({
+    req.body.password = await cryptpassword(req.body.password);
+    await prisma.users.create({
       data: {
-        name: user.name,
-        email: user.email,
-        password: user.password
+        name: req.body.name,
+        email: req.body.email,
+        password: req.body.password
       }
     });
-
-    console.log('Novo usuário adicionado:');
-  }
+    
+   }
   catch (error) {
-    console.error('Erro ao adicionar usuário:', error);
+    console.error('The function addUser() has returned an error: ', error);
   }
   finally {
     await prisma.$disconnect();
+  }
+
+}
+
+async function findUsers(req){
+  try {
+    const user = await prisma.users.findUnique({
+      where: {
+        email: req.body.email,
+      },
+    });
+    
+    console.log(user)
+    return user;
+  } 
+  catch (error) {
+    console.log('The function findUsers() has returned an error: ' + error)
+  }
+  finally{
+    await prisma.$disconnect();
+  }
+}
+
+async function login(user,pass){
+  try {
+    const userData = await prisma.users.findUnique({
+      where: {
+        email: user
+      }
+    });
+
+    if(userData != null){
+      const isPasswordValid = await comparePasswordHashes(pass,userData.password);
+      if( isPasswordValid){
+        return true;
+      }
+      else{
+        return false;
+      }
+      
+    }
+    else{
+      return false;
+    }
+  
+  } catch (error) {
+    console.log('The function login() has returned an error: ' + error);
+  }
+  
+  finally{
+    await prisma.$disconnect();
+  }
+
+}
+
+async function cryptpassword(pass){
+  try {
+    const hashpass = await bcrypt.hash(pass, saltRounds);
+    return hashpass;
+  } catch (error) {
+    console.log('The function cryptpassword() has returned an error: ' + error);
+  }
+  
+}
+
+async function comparePasswordHashes(pass,hash){
+  try {
+    const comparation = await bcrypt.compare(pass, hash);
+    return comparation;
+  } catch (error) {
+    console.log('The function comparePasswordHashes() has returned an error: ' + error);
   }
 
 }
