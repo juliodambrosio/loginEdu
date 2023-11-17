@@ -1,16 +1,21 @@
 const express = require('express');
 const app = express();
-const port = 3000;
+const port = 8080;
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const bcrypt = require("bcrypt");
 const saltRounds = 10;
+// No seu arquivo de backend (por exemplo, server.js)
+const cors = require('cors');
+
+
 
 
 
 // Middleware para lidar com dados JSON
 app.use(express.json());
+app.use(cors());
 
 app.get('/', (req, res) => {
   res.send('Hello, World!');
@@ -20,12 +25,20 @@ app.get('/', (req, res) => {
 
 app.get('/search', async (req, res)=>{
   try {
-    findUsers(req);
-    res.status(200).json({ message: 'User was found!! Your login is approved!!'});
+    const users = await findUsers(req);
+    if(users != null){
+      res.status(200).json({ message: 'User was found!! '});
+      
+    }
+    else{
+      res.status(404).json({ message: 'Not Found!! '});
+    }
+    
     
   } 
   catch (error) {
     console.log("Error: " + error)
+    res.status(500).json({ message: 'Internal Server Error'});
   }
 
   
@@ -33,16 +46,20 @@ app.get('/search', async (req, res)=>{
 });
 
 
-app.get('/login', async (req, res)=>{
+app.post('/login', async (req, res)=>{
+  try {
+    if(await login(req.body.email,req.body.password)){
+      res.status(200).json({ message: 'User was found!! Your login is approved!!'});
+      console.log('User was found!! Your login is approved!!')
+    }
+    else{
+      res.status(401).json({ message: 'User is incorrect !! Verify your email or passwords!!'});
+      console.log('User is incorrect !! Verify your email or passwords!!')
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Internal Server Error'});
+  }
   
-  if(await login(req.body.email,req.body.password)){
-    res.status(200).json({ message: 'User was found!! Your login is approved!!'});
-    console.log('User was found!! Your login is approved!!')
-  }
-  else{
-    res.status(401).json({ message: 'User is incorrect !! Verify your email or passwords!!'});
-    console.log('User is incorrect !! Verify your email or passwords!!')
-  }
   
   
 });
